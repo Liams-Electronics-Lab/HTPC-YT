@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>App Settings</title>
+    <style>
+        body {
+            background-color: #212121;
+            color: #fff;
+            font-family: Roboto, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        .container {
+            width: 80%;
+            max-width: 800px;
+        }
+        h1 {
+            font-size: 42px;
+            margin-bottom: 60px;
+            text-align: center;
+            color: #eee;
+        }
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 30px;
+            margin-bottom: 15px;
+            background: #333;
+            border-radius: 8px;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .setting-row.selected {
+            background: #444;
+            border-color: #aaa;
+            transform: scale(1.02);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        .label {
+            font-size: 24px;
+            font-weight: 500;
+        }
+        .value {
+            font-size: 24px;
+            color: #ccc;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .arrow {
+            font-size: 18px;
+            color: #888;
+        }
+        .setting-row.selected .arrow {
+            color: #fff; /* Highlight arrows when row selected */
+        }
+        .buttons-row {
+            margin-top: 50px;
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+        }
+        .action-btn {
+            padding: 15px 50px;
+            font-size: 22px;
+            border: none;
+            border-radius: 30px;
+            background: #333;
+            color: #aaa;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        .action-btn.selected {
+            background: #f1f1f1;
+            color: #0d0d0d;
+            transform: scale(1.05);
+        }
+        .about-section {
+            margin-top: 60px;
+            text-align: center;
+            color: #888;
+        }
+        .about-title {
+            font-size: 24px;
+            color: #fff;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .about-desc {
+            font-size: 16px;
+            line-height: 1.5;
+        }
+        .qr-container {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-top: 25px;
+        }
+        .qr-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        .qr-img {
+            width: 120px;
+            height: 120px;
+            background: #fff;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .qr-label {
+            font-size: 14px;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>App Settings</h1>
+        
+        <div id="row-res" class="setting-row selected">
+            <span class="label">Resolution</span>
+            <div class="value">
+                <span class="arrow">◄</span>
+                <span id="val-res">1920x1080</span>
+                <span class="arrow">►</span>
+            </div>
+        </div>
+
+        <div id="row-fs" class="setting-row">
+            <span class="label">Fullscreen</span>
+            <div class="value">
+                <span class="arrow">◄</span>
+                <span id="val-fs">ON</span>
+                <span class="arrow">►</span>
+            </div>
+        </div>
+
+        <div id="row-url" class="setting-row">
+            <span class="label">Display URL</span>
+            <div class="value">
+                <span class="arrow">◄</span>
+                <span id="val-url">OFF</span>
+                <span class="arrow">►</span>
+            </div>
+        </div>
+
+        <div id="row-reset" class="setting-row">
+            <span class="label" style="color: #ff6b6b;">RESET APP</span>
+            <div class="value">
+                <span class="arrow">CONFIRM?</span>
+            </div>
+        </div>
+
+        <div class="buttons-row">
+            <button id="btn-save" class="action-btn">Save & Exit</button>
+            <button id="btn-cancel" class="action-btn">Cancel</button>
+        </div>
+
+        <div class="about-section">
+            <div class="about-title">HTPC-YT</div>
+            <div class="about-desc">
+                Leanback YouTube application for HTPC use.<br>
+                Created by Liam's Electronics Lab
+            </div>
+            <div class="qr-container">
+                <div class="qr-item">
+                    <!-- Blue QR for Github (color=2196F3) -->
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://github.com/Liams-Electronics-Lab&color=2196F3" class="qr-img" alt="Github QR">
+                    <span class="qr-label">Github</span>
+                </div>
+                <div class="qr-item">
+                    <!-- Red QR for Youtube (color=FF0000) -->
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://www.youtube.com/@Slot1Gamer&color=FF0000" class="qr-img" alt="Youtube QR">
+                    <span class="qr-label">Youtube</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const resolutions = [
+            { w: 3840, h: 2160, label: '3840x2160 (4K)' },
+            { w: 2560, h: 1440, label: '2560x1440 (2K)' },
+            { w: 1920, h: 1080, label: '1920x1080' },
+            { w: 1280, h: 720, label: '1280x720' },
+            { w: 1024, h: 768, label: '1024x768' }
+        ];
+        let currentResIndex = 2; // Default to 1080p
+        let isFullscreen = true;
+        let showUrl = false;
+
+        // UI Element References
+        const rowRes = document.getElementById('row-res');
+        const rowFs = document.getElementById('row-fs');
+        const rowUrl = document.getElementById('row-url');
+        const rowReset = document.getElementById('row-reset');
+        const btnSave = document.getElementById('btn-save');
+        const btnCancel = document.getElementById('btn-cancel');
+        const valRes = document.getElementById('val-res');
+        const valFs = document.getElementById('val-fs');
+        const valUrl = document.getElementById('val-url');
+
+        // Navigable items order
+        const navItems = [rowRes, rowFs, rowUrl, rowReset, btnSave, btnCancel];
+        let selectedIndex = 0;
+
+        function updateUI() {
+            // Update selected row styling
+            navItems.forEach((item, index) => {
+                if (index === selectedIndex) item.classList.add('selected');
+                else item.classList.remove('selected');
+            });
+
+            // Update values
+            valRes.textContent = resolutions[currentResIndex].label;
+            valFs.textContent = isFullscreen ? 'ON' : 'OFF';
+            valUrl.textContent = showUrl ? 'ON' : 'OFF';
+        }
+
+        window.addEventListener('keydown', (e) => {
+            e.preventDefault();
+
+            switch(e.key) {
+                case 'ArrowUp':
+                    if (selectedIndex > 0) {
+                        // Logic for bottom buttons to Reset row
+                        if (navItems[selectedIndex] === btnCancel || navItems[selectedIndex] === btnSave) {
+                            selectedIndex = 3; // Reset row
+                        } else {
+                            selectedIndex--;
+                        }
+                    }
+                    break;
+                
+                case 'ArrowDown':
+                    if (selectedIndex < navItems.length - 1) {
+                         // Logic for last row (Reset) to buttons
+                         if (navItems[selectedIndex] === rowReset) {
+                             selectedIndex = 4; // Save button
+                         } else if (navItems[selectedIndex].classList.contains('action-btn')) {
+                             // Already at buttons, do nothing
+                         } else {
+                             selectedIndex++;
+                         }
+                    }
+                    break;
+
+                case 'ArrowLeft':
+                    if (navItems[selectedIndex] === rowRes) {
+                        if (currentResIndex < resolutions.length - 1) currentResIndex++;
+                    }
+                    else if (navItems[selectedIndex] === rowFs) {
+                        isFullscreen = !isFullscreen;
+                    }
+                    else if (navItems[selectedIndex] === rowUrl) {
+                        showUrl = !showUrl;
+                    }
+                    else if (navItems[selectedIndex] === btnCancel) {
+                        selectedIndex = 4; // Go to Save
+                    }
+                    break;
+
+                case 'ArrowRight':
+                    if (navItems[selectedIndex] === rowRes) {
+                        if (currentResIndex > 0) currentResIndex--;
+                    }
+                    else if (navItems[selectedIndex] === rowFs) {
+                        isFullscreen = !isFullscreen;
+                    }
+                    else if (navItems[selectedIndex] === rowUrl) {
+                        showUrl = !showUrl;
+                    }
+                    else if (navItems[selectedIndex] === btnSave) {
+                        selectedIndex = 5; // Go to Cancel
+                    }
+                    break;
+
+                case 'Enter':
+                case ' ':
+                    if (navItems[selectedIndex] === btnSave) {
+                        window.electronAPI.send('apply-settings', {
+                            resolution: resolutions[currentResIndex],
+                            fullscreen: isFullscreen,
+                            showUrl: showUrl
+                        });
+                    } else if (navItems[selectedIndex] === btnCancel) {
+                        window.electronAPI.send('close-settings');
+                    } else if (navItems[selectedIndex] === rowReset) {
+                        if (confirm("Are you sure you want to completely reset the app? This will clear all data and settings.")) {
+                             window.electronAPI.send('reset-app');
+                        }
+                    }
+                    break;
+                
+                case 'Escape':
+                case 'BrowserBack':
+                    window.electronAPI.send('close-settings');
+                    break;
+            }
+            updateUI();
+        });
+
+        // Initial Render
+        // Request actual settings from main process
+        window.electronAPI.on('return-settings', (settings) => {
+            isFullscreen = settings.fullscreen;
+            showUrl = settings.showUrl || false;
+            
+            // Find resolution index match
+            const foundIndex = resolutions.findIndex(r => r.w === settings.width && r.h === settings.height);
+            if (foundIndex !== -1) {
+                currentResIndex = foundIndex;
+            } else {
+                currentResIndex = 2; 
+            }
+            updateUI();
+        });
+
+        window.electronAPI.send('get-settings');
+    </script>
+</body>
+</html>

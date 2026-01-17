@@ -1,0 +1,32 @@
+{
+  "name": "htpc-yt",
+  "version": "1.0.0",
+  "description": "Youtube TV App",
+  "main": "index.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "npm run dist",
+    "dist": "electron-packager . \"htpc-yt\" --platform=win32 --arch=x64 --out=dist --overwrite --icon=\"APP-icon.ico\" --ignore=\"^/(\\.github|\\.vscode|GitHub Release|UserData|dist)\" --asar",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "LiamsElectronics Lab",
+  "license": "GNU GPLv3",
+  "type": "commonjs",
+  "devDependencies": {
+    "caxa": "^3.0.1",
+    "electron": "^39.2.7",
+    "electron-builder": "^26.4.0",
+    "electron-packager": "^17.1.2"
+  },
+  "build": {
+    "appId": "com.liamselectronics.htpcyt",
+    "win": {
+      "target": "portable",
+      "icon": "APP-icon.ico"
+    },
+    "portable": {
+      "artifactName": "htpc-yt.exe"
+    }
+  }
+}

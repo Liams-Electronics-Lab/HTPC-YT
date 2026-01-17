@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Exit Application</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: Roboto, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+        }
+        h1 {
+            font-size: 32px;
+            margin-bottom: 40px;
+            font-weight: 500;
+            opacity: 0.9;
+        }
+        .btn-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 300px;
+        }
+        button {
+            background: #212121;
+            color: #aaa;
+            border: none;
+            padding: 15px 0;
+            font-size: 18px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+            outline: none;
+        }
+        button:focus, button.selected {
+            background: #f1f1f1;
+            color: #0f0f0f;
+            transform: scale(1.03);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .logo {
+            margin-bottom: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #ff0000;
+        }
+    </style>
+</head>
+<body>
+    <div class="logo">HTPC-YT</div>
+    <h1>Exit Application?</h1>
+    
+    <div class="btn-container">
+        <button id="btn-cancel">Return to YouTube</button>
+        <button id="btn-settings">Settings</button>
+        <button id="btn-exit">Exit</button>
+    </div>
+
+    <script>
+        // Use the exposed electronAPI from preload.js
+        // const { ipcRenderer } = require('electron'); // Removed due to contextIsolation
+        
+        // Simple navigation handling for the exit page
+        const buttons = ['btn-cancel', 'btn-settings', 'btn-exit'];
+        let selectedIndex = 0;
+
+        function updateSelection() {
+            buttons.forEach((id, index) => {
+                const btn = document.getElementById(id);
+                if (index === selectedIndex) {
+                    btn.classList.add('selected');
+                    btn.focus();
+                } else {
+                    btn.classList.remove('selected');
+                }
+            });
+        }
+
+        document.getElementById('btn-exit').addEventListener('click', () => {
+             if (window.electronAPI) window.electronAPI.send('confirm-exit');
+        });
+
+        document.getElementById('btn-settings').addEventListener('click', () => {
+             if (window.electronAPI) {
+                 window.electronAPI.allowNav();
+                 window.electronAPI.send('open-settings');
+             }
+        });
+
+        document.getElementById('btn-cancel').addEventListener('click', () => {
+             // Force a fresh return via IPC to ensure settings are re-applied
+             if (window.electronAPI) {
+                 window.electronAPI.allowNav();
+                 window.electronAPI.send('return-to-tv');
+             }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowUp') {
+                selectedIndex = (selectedIndex - 1 + buttons.length) % buttons.length;
+                updateSelection();
+            } else if (e.key === 'ArrowDown') {
+                selectedIndex = (selectedIndex + 1) % buttons.length;
+                updateSelection();
+            } else if (e.key === 'Enter') {
+                document.getElementById(buttons[selectedIndex]).click();
+            } else if (e.key === 'Escape') {
+                // Escape on Exit page => Return to YouTube
+                document.getElementById('btn-cancel').click();
+            }
+        });
+
+        // Initialize
+        updateSelection();
+    </script>
+</body>
+</html>
