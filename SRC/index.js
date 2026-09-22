@@ -29,15 +29,6 @@ app.setPath('crashDumps', crashDumpsPath);
 app.commandLine.appendSwitch('disk-cache-dir', cachePath);
 app.commandLine.appendSwitch('shader-disk-cache-path', cachePath);
 
-// Force high-quality rendering and GPU usage
-app.commandLine.appendSwitch('ignore-gpu-blocklist');
-app.commandLine.appendSwitch('enable-gpu-rasterization');
-app.commandLine.appendSwitch('enable-zero-copy');
-app.commandLine.appendSwitch('high-dpi-support', '1');
-app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
-// Ensures the app renders at the correct device scale factor (useful for 4K screens)
-app.commandLine.appendSwitch('force-device-scale-factor', '1'); 
-
 // Set settings.ini path: Next to executable in Prod, or in source root in Dev
 const settingsPath = app.isPackaged 
     ? path.join(path.dirname(process.execPath), 'settings.ini') 
@@ -45,13 +36,23 @@ const settingsPath = app.isPackaged
 
 // Default Settings
 const defaultSettings = {
-    width: 1920,
+    width: 1920,                // Resolution row in Settings. Window size when fullscreen is off, AND the ceiling for video quality: the height is the highest quality YouTube may play (see getMaxVideoHeight)
     height: 1080,
     fullscreen: true,
     userAgent: 'Mozilla/5.0 (PS4; Leanback Shell) Cobalt/22.2.3-gold Firefox/65.0 LeanbackShell/01.00.01.75 Sony PS4/ (PS4, , no, CH)',
     inputDebounce: 150,
-    showUrl: false
+    showUrl: false,
+    hardwareDecoding: true,     // Startup-only: applied by relaunching the app (see apply-settings)
+    lowMemoryMode: false,       // Asks YouTube TV for its reduced-memory mode (applied on the next page load)
+    unlockResolution: true,     // Lets YouTube offer resolutions above the display size (ini only, no settings-page row)
+    removeSuperResolution: false, // Hides YouTube's AI-upscaled "Super resolution" quality tier (applied on the next page load)
+    adBlock: true,              // Strips ads from playback, home feed and search (applied on the next page load)
+    highContrastText: true      // true = keep YouTube's black boxes behind on-video text; false = remove them and use a text outline instead. Subtitles are never touched (applied on the next page load)
 };
+
+// Boolean settings that the settings page may change (anything else in the payload is ignored).
+// Add the key here, in defaultSettings, and in settings.html's featureToggles.
+const TOGGLE_KEYS = ['hardwareDecoding', 'lowMemoryMode', 'removeSuperResolution', 'adBlock', 'highContrastText'];
 
 function parseIni(data) {
     const config = {};
@@ -63,8 +64,9 @@ function parseIni(data) {
         if (idx !== -1) {
             const key = line.substring(0, idx).trim();
             const val = line.substring(idx + 1).trim();
-            if (val === 'true') config[key] = true;
-            else if (val === 'false') config[key] = false;
+            const lower = val.toLowerCase();
+            if (lower === 'true') config[key] = true;
+            else if (lower === 'false') config[key] = false;
             else if (!isNaN(Number(val)) && val !== '') config[key] = Number(val);
             else config[key] = val;
         }
@@ -99,6 +101,67 @@ function saveSettings(settings) {
     }
 }
 
+// The Resolution row in Settings doubles as the video-quality ceiling: 1080 means nothing above
+// 1080p is offered. The preload compares this number against each format's quality label, so any
+// height works (720 -> up to 720p, 768 -> up to 720p, 2160 -> up to 2160p). Anything that is not a
+// positive number (hand-edited ini, garbage) means "no ceiling" (0) rather than a broken cap.
+function getMaxVideoHeight(settings) {
+    const h = Number(settings.height);
+    return Number.isFinite(h) && h > 0 ? Math.round(h) : 0;
+}
+
+// The subset of settings the preload needs *synchronously at document start* to install its
+// YouTube TV hooks (see preload.js, installHtpcHooks). Booleans plus the maxVideoHeight number:
+// nothing sensitive leaves main.
+function getFeatureFlags() {
+    const s = loadSettings();
+    return {
+        maxVideoHeight: getMaxVideoHeight(s),
+        lowMemoryMode: !!s.lowMemoryMode,
+        unlockResolution: !!s.unlockResolution,
+        removeSuperResolution: !!s.removeSuperResolution,
+        adBlock: !!s.adBlock,
+        highContrastText: !!s.highContrastText,
+        appVersion: app.getVersion()
+    };
+}
+
+// ---- Diagnostic flags (command line only, not stored in settings.ini) ----
+// npx electron . --debug-gpu   opens chrome://gpu in a normal window (check "Video Decode")
+// npx electron . --devtools    opens detached DevTools next to the app window
+const debugGpu = process.argv.includes('--debug-gpu');
+const openDevTools = process.argv.includes('--devtools');
+
+// ---- GPU / hardware decoding ----
+// These are Chromium startup switches, so they are decided from settings.ini before the app is ready.
+// (Ported behavior from VacuumTube src/index.js: off -> disableHardwareAcceleration(), on -> enable video accel features.)
+const startupSettings = loadSettings();
+
+function splitList(value) {
+    return String(value || '').split(',').map(s => s.trim()).filter(Boolean);
+}
+
+if (!startupSettings.hardwareDecoding) {
+    app.disableHardwareAcceleration();
+} else {
+    // Force high-quality rendering and GPU usage
+    app.commandLine.appendSwitch('ignore-gpu-blocklist');
+    app.commandLine.appendSwitch('enable-gpu-rasterization');
+    app.commandLine.appendSwitch('enable-zero-copy');
+
+    // Video accel features (same names VacuumTube uses; unknown names are ignored by Chromium)
+    const enableFeatures = new Set(splitList(app.commandLine.getSwitchValue('enable-features')));
+    enableFeatures.add('AcceleratedVideoDecoder');
+    enableFeatures.add('AcceleratedVideoEncoder');
+    app.commandLine.appendSwitch('enable-features', [...enableFeatures].join(','));
+}
+
+app.commandLine.appendSwitch('high-dpi-support', '1');
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+// Ensures the app renders at the correct device scale factor (useful for 4K screens)
+app.commandLine.appendSwitch('force-device-scale-factor', '1');
+
+
 let isQuitting = false;
 
 app.on('before-quit', () => {
@@ -115,9 +178,19 @@ ipcMain.on('open-settings', (event) => {
     if (win) win.loadFile(path.join(__dirname, 'settings.html'));
 });
 
+ipcMain.on('get-feature-flags', (event) => {
+    // sendSync from preload.js: it must be synchronous so hooks are in place before YouTube's scripts run
+    event.returnValue = getFeatureFlags();
+});
+
+ipcMain.on('get-app-version', (event) => {
+    // sendSync from preload.js: needed at document start for the startup version overlay
+    event.returnValue = app.getVersion();
+});
+
 ipcMain.on('get-settings', (event) => {
-    // Send current settings back to renderer
-    event.sender.send('return-settings', loadSettings());
+    // Send current settings back to renderer (appVersion comes from package.json, not the ini)
+    event.sender.send('return-settings', { ...loadSettings(), appVersion: app.getVersion() });
 });
 
 ipcMain.on('close-settings', (event) => {
@@ -138,7 +211,20 @@ ipcMain.on('apply-settings', (event, newSettings) => {
             showUrl: newSettings.showUrl
         };
 
+        // Feature toggles: only known keys, only real booleans
+        const toggles = (newSettings && newSettings.toggles) || {};
+        for (const key of TOGGLE_KEYS) {
+            if (typeof toggles[key] === 'boolean') settingsToSave[key] = toggles[key];
+        }
+
         saveSettings(settingsToSave);
+
+        // Startup-only settings (Chromium switches) need a fresh process
+        if (settingsToSave.hardwareDecoding !== currentSettings.hardwareDecoding) {
+            app.relaunch();
+            app.exit(0);
+            return;
+        }
 
         win.setFullScreen(settingsToSave.fullscreen);
         if (!settingsToSave.fullscreen) {
@@ -243,12 +329,14 @@ function playStartupSound() {
 
 function createWindow() {
     const settings = loadSettings();
+    // --debug-gpu: normal window and free exit, so chrome://gpu can be read and closed
+    if (debugGpu) isQuitting = true;
     const mainWindow = new BrowserWindow({
         width: settings.width,
         height: settings.height,
-        fullscreen: settings.fullscreen,
-        kiosk: settings.fullscreen, // Enable Kiosk mode if fullscreen is requested
-        frame: false, // Frameless for TV feel
+        fullscreen: !debugGpu && settings.fullscreen,
+        kiosk: !debugGpu && settings.fullscreen, // Enable Kiosk mode if fullscreen is requested
+        frame: debugGpu, // Frameless for TV feel (framed only for --debug-gpu)
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
@@ -260,6 +348,16 @@ function createWindow() {
     // Load User Agent from settings
     const tvUserAgent = settings.userAgent;
     mainWindow.webContents.userAgent = tvUserAgent;
+
+    if (openDevTools) {
+        mainWindow.webContents.openDevTools({ mode: 'detach' });
+    }
+
+    // Diagnostics: show Chromium's GPU status instead of YouTube TV
+    if (debugGpu) {
+        mainWindow.loadURL('chrome://gpu');
+        return;
+    }
 
     // Directly load YouTube TV. 
     // We rely on the 'close' event handler to show the Exit Menu, rather than history navigation.

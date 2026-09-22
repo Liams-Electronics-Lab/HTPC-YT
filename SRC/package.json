@@ -1,13 +1,13 @@
 {
   "name": "htpc-yt",
-  "version": "1.0.0",
+  "version": "1.5.0",
   "description": "Youtube TV App",
   "main": "index.js",
   "scripts": {
     "start": "electron .",
     "build": "npm run dist",
-    "dist": "electron-packager . \"htpc-yt\" --platform=win32 --arch=x64 --out=dist --overwrite --icon=\"APP-icon.ico\" --ignore=\"^/(\\.github|\\.vscode|GitHub Release|UserData|dist)\" --asar",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dist": "electron-packager . \"htpc-yt\" --platform=win32 --arch=x64 --out=dist --overwrite --icon=\"APP-icon.ico\" --ignore=\"^/(\\.github|\\.vscode|GitHub Release|UserData|dist|test)\" --asar",
+    "test": "node --test"
   },
   "keywords": [],
   "author": "LiamsElectronics Lab",

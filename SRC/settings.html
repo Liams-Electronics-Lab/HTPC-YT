@@ -19,10 +19,17 @@
         .container {
             width: 80%;
             max-width: 800px;
+            max-height: 100vh;
+            box-sizing: border-box;
+            padding: 24px 0;
+            overflow-y: auto;          /* the page is taller than the screen once toggle rows are added */
+            scrollbar-width: none;     /* hidden: navigation is by keyboard, the selected row is scrolled into view */
         }
+        .container::-webkit-scrollbar { display: none; }
         h1 {
-            font-size: 42px;
-            margin-bottom: 60px;
+            font-size: 36px;
+            margin-top: 0;
+            margin-bottom: 28px;
             text-align: center;
             color: #eee;
         }
@@ -30,8 +37,8 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 20px 30px;
-            margin-bottom: 15px;
+            padding: 16px 30px;
+            margin-bottom: 10px;
             background: #333;
             border-radius: 8px;
             border: 2px solid transparent;
@@ -46,6 +53,17 @@
         .label {
             font-size: 24px;
             font-weight: 500;
+        }
+        .label-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding-right: 20px;
+        }
+        .hint {
+            font-size: 15px;
+            font-weight: 400;
+            color: #999;
         }
         .value {
             font-size: 24px;
@@ -62,7 +80,7 @@
             color: #fff; /* Highlight arrows when row selected */
         }
         .buttons-row {
-            margin-top: 50px;
+            margin-top: 30px;
             display: flex;
             justify-content: center;
             gap: 30px;
@@ -83,7 +101,7 @@
             transform: scale(1.05);
         }
         .about-section {
-            margin-top: 60px;
+            margin-top: 40px;
             text-align: center;
             color: #888;
         }
@@ -120,6 +138,12 @@
             font-size: 14px;
             color: #aaa;
         }
+        .version-footer {
+            margin-top: 25px;
+            text-align: center;
+            font-size: 13px;
+            color: #777;
+        }
     </style>
 </head>
 <body>
@@ -127,7 +151,10 @@
         <h1>App Settings</h1>
         
         <div id="row-res" class="setting-row selected">
-            <span class="label">Resolution</span>
+            <div class="label-wrap">
+                <span class="label">Resolution</span>
+                <span id="hint-res" class="hint"></span>
+            </div>
             <div class="value">
                 <span class="arrow">◄</span>
                 <span id="val-res">1920x1080</span>
@@ -183,6 +210,7 @@
                     <span class="qr-label">Youtube</span>
                 </div>
             </div>
+            <div class="version-footer" id="version-footer"></div>
         </div>
     </div>
 
@@ -194,11 +222,31 @@
             { w: 1280, h: 720, label: '1280x720' },
             { w: 1024, h: 768, label: '1024x768' }
         ];
+        // The selected resolution also caps video quality (the preload drops every format taller than
+        // the height). The hint shows the standard YouTube tier that ends up as the ceiling, e.g. 1024x768 -> 720p.
+        const QUALITY_TIERS = [144, 240, 360, 480, 720, 1080, 1440, 2160, 4320];
+        function qualityCeiling(height) {
+            let best = QUALITY_TIERS[0];
+            for (const tier of QUALITY_TIERS) if (tier <= height) best = tier;
+            return best;
+        }
         let currentResIndex = 2; // Default to 1080p
         let isFullscreen = true;
         let showUrl = false;
 
+        // On/off feature rows, built below and placed above the Reset row.
+        // To add one: add an entry here AND add the key to defaultSettings + TOGGLE_KEYS in index.js.
+        // `value` is only the initial placeholder; the real value arrives with 'return-settings'.
+        const featureToggles = [
+            { key: 'hardwareDecoding', label: 'Hardware Decoding', hint: 'Use the GPU to decode video. Restarts the app when changed.', value: true },
+            { key: 'lowMemoryMode', label: 'Low Memory Mode', hint: 'Ask YouTube for its reduced-memory mode (fewer visual effects).', value: false },
+            { key: 'removeSuperResolution', label: 'Remove Super Resolution', hint: 'Hide the AI-upscaled quality tier from the quality menu.', value: false },
+            { key: 'adBlock', label: 'Ad Block', hint: 'Strip ads from playback, the home feed and search.', value: true },
+            { key: 'highContrastText', label: 'High Contrast Text Mode', hint: "ON keeps YouTube's black boxes behind on-video text. OFF removes them and uses an outline instead.", value: true }
+        ];
+
         // UI Element References
+        const container = document.querySelector('.container');
         const rowRes = document.getElementById('row-res');
         const rowFs = document.getElementById('row-fs');
         const rowUrl = document.getElementById('row-url');
@@ -206,12 +254,50 @@
         const btnSave = document.getElementById('btn-save');
         const btnCancel = document.getElementById('btn-cancel');
         const valRes = document.getElementById('val-res');
+        const hintRes = document.getElementById('hint-res');
         const valFs = document.getElementById('val-fs');
         const valUrl = document.getElementById('val-url');
 
-        // Navigable items order
-        const navItems = [rowRes, rowFs, rowUrl, rowReset, btnSave, btnCancel];
+        function makeSpan(className, text) {
+            const s = document.createElement('span');
+            if (className) s.className = className;
+            if (text !== undefined) s.textContent = text;
+            return s;
+        }
+
+        // Build a toggle row that looks like the hardcoded ones (label + hint on the left, ◄ VALUE ► on the right)
+        function buildToggleRow(toggle) {
+            const row = document.createElement('div');
+            row.className = 'setting-row';
+            row.id = 'row-' + toggle.key;
+
+            const wrap = document.createElement('div');
+            wrap.className = 'label-wrap';
+            wrap.append(makeSpan('label', toggle.label), makeSpan('hint', toggle.hint));
+
+            const value = document.createElement('div');
+            value.className = 'value';
+            toggle.valEl = makeSpan('', '');
+            toggle.valEl.id = 'val-' + toggle.key;
+            value.append(makeSpan('arrow', '\u25C4'), toggle.valEl, makeSpan('arrow', '\u25BA'));
+
+            row.append(wrap, value);
+            rowReset.parentNode.insertBefore(row, rowReset);
+            toggle.row = row;
+            return row;
+        }
+        featureToggles.forEach(buildToggleRow);
+
+        // Navigable items order (indexes below are looked up, never hardcoded)
+        const navItems = [rowRes, rowFs, rowUrl, ...featureToggles.map(t => t.row), rowReset, btnSave, btnCancel];
+        const idxReset = navItems.indexOf(rowReset);
+        const idxSave = navItems.indexOf(btnSave);
+        const idxCancel = navItems.indexOf(btnCancel);
         let selectedIndex = 0;
+
+        function toggleAt(index) {
+            return featureToggles.find(t => t.row === navItems[index]);
+        }
 
         function updateUI() {
             // Update selected row styling
@@ -222,82 +308,106 @@
 
             // Update values
             valRes.textContent = resolutions[currentResIndex].label;
+            hintRes.textContent = 'Highest video quality: ' + qualityCeiling(resolutions[currentResIndex].h) +
+                'p. Also the window size when Fullscreen is OFF.';
             valFs.textContent = isFullscreen ? 'ON' : 'OFF';
             valUrl.textContent = showUrl ? 'ON' : 'OFF';
+            featureToggles.forEach(t => { t.valEl.textContent = t.value ? 'ON' : 'OFF'; });
+
+            // Keep the selected item on screen (the mouse wheel and scrollbar are not used)
+            const selected = navItems[selectedIndex];
+            if (selected.classList.contains('action-btn')) {
+                container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+            } else if (selectedIndex === 0) {
+                container.scrollTo({ top: 0, behavior: 'smooth' });
+            } else {
+                selected.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            }
         }
 
         window.addEventListener('keydown', (e) => {
             e.preventDefault();
+            const current = navItems[selectedIndex];
+            const currentToggle = toggleAt(selectedIndex);
 
             switch(e.key) {
                 case 'ArrowUp':
                     if (selectedIndex > 0) {
-                        // Logic for bottom buttons to Reset row
-                        if (navItems[selectedIndex] === btnCancel || navItems[selectedIndex] === btnSave) {
-                            selectedIndex = 3; // Reset row
+                        // Bottom buttons go back up to the Reset row
+                        if (current === btnCancel || current === btnSave) {
+                            selectedIndex = idxReset;
                         } else {
                             selectedIndex--;
                         }
                     }
                     break;
-                
+
                 case 'ArrowDown':
                     if (selectedIndex < navItems.length - 1) {
-                         // Logic for last row (Reset) to buttons
-                         if (navItems[selectedIndex] === rowReset) {
-                             selectedIndex = 4; // Save button
-                         } else if (navItems[selectedIndex].classList.contains('action-btn')) {
-                             // Already at buttons, do nothing
-                         } else {
-                             selectedIndex++;
-                         }
+                        // Reset row goes down to the Save button
+                        if (current === rowReset) {
+                            selectedIndex = idxSave;
+                        } else if (current.classList.contains('action-btn')) {
+                            // Already at buttons, do nothing
+                        } else {
+                            selectedIndex++;
+                        }
                     }
                     break;
 
                 case 'ArrowLeft':
-                    if (navItems[selectedIndex] === rowRes) {
+                    if (current === rowRes) {
                         if (currentResIndex < resolutions.length - 1) currentResIndex++;
                     }
-                    else if (navItems[selectedIndex] === rowFs) {
+                    else if (current === rowFs) {
                         isFullscreen = !isFullscreen;
                     }
-                    else if (navItems[selectedIndex] === rowUrl) {
+                    else if (current === rowUrl) {
                         showUrl = !showUrl;
                     }
-                    else if (navItems[selectedIndex] === btnCancel) {
-                        selectedIndex = 4; // Go to Save
+                    else if (currentToggle) {
+                        currentToggle.value = !currentToggle.value;
+                    }
+                    else if (current === btnCancel) {
+                        selectedIndex = idxSave; // Go to Save
                     }
                     break;
 
                 case 'ArrowRight':
-                    if (navItems[selectedIndex] === rowRes) {
+                    if (current === rowRes) {
                         if (currentResIndex > 0) currentResIndex--;
                     }
-                    else if (navItems[selectedIndex] === rowFs) {
+                    else if (current === rowFs) {
                         isFullscreen = !isFullscreen;
                     }
-                    else if (navItems[selectedIndex] === rowUrl) {
+                    else if (current === rowUrl) {
                         showUrl = !showUrl;
                     }
-                    else if (navItems[selectedIndex] === btnSave) {
-                        selectedIndex = 5; // Go to Cancel
+                    else if (currentToggle) {
+                        currentToggle.value = !currentToggle.value;
+                    }
+                    else if (current === btnSave) {
+                        selectedIndex = idxCancel; // Go to Cancel
                     }
                     break;
 
                 case 'Enter':
                 case ' ':
-                    if (navItems[selectedIndex] === btnSave) {
+                    if (current === btnSave) {
                         window.electronAPI.send('apply-settings', {
                             resolution: resolutions[currentResIndex],
                             fullscreen: isFullscreen,
-                            showUrl: showUrl
+                            showUrl: showUrl,
+                            toggles: Object.fromEntries(featureToggles.map(t => [t.key, t.value]))
                         });
-                    } else if (navItems[selectedIndex] === btnCancel) {
+                    } else if (current === btnCancel) {
                         window.electronAPI.send('close-settings');
-                    } else if (navItems[selectedIndex] === rowReset) {
+                    } else if (current === rowReset) {
                         if (confirm("Are you sure you want to completely reset the app? This will clear all data and settings.")) {
                              window.electronAPI.send('reset-app');
                         }
+                    } else if (currentToggle) {
+                        currentToggle.value = !currentToggle.value;
                     }
                     break;
                 
@@ -312,8 +422,14 @@
         // Initial Render
         // Request actual settings from main process
         window.electronAPI.on('return-settings', (settings) => {
+            if (settings.appVersion) {
+                document.getElementById('version-footer').textContent = 'Ver. ' + settings.appVersion;
+            }
             isFullscreen = settings.fullscreen;
             showUrl = settings.showUrl || false;
+            featureToggles.forEach(t => {
+                if (typeof settings[t.key] === 'boolean') t.value = settings[t.key];
+            });
             
             // Find resolution index match
             const foundIndex = resolutions.findIndex(r => r.w === settings.width && r.h === settings.height);
