@@ -30,6 +30,11 @@ Anyway, I didnt find a project I liked that worked with my specific remote contr
 - Exit prompt screen
 - Customizable key debounce
 - Simple controls (Directional, enter, escape)
+- Ad Block
+- Low Memory Mode: reduces YouTube TV's memory footprint
+- Unlock Resolution: stops YouTube capping quality to the monitor's detected size
+- Remove Super Resolution: filters out AI-upscaled "Super resolution" formats from the quality list
+- Hardware Decoding (optional)
 
 ## Installation
 
